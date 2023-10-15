@@ -414,7 +414,7 @@ class ABCoutput:
         )
     )
 
-    def __init__(s, fnmext, pad, X, options):
+    def __init__(s, fnmext, output_dir, X, options):
         s.fnmext = fnmext
         s.outlist = []  # list of ABC strings
         s.title = "T:Title"
@@ -423,7 +423,8 @@ class ABCoutput:
         s.mtr = "none"
         s.tempo = 0  # 0 -> no tempo field
         s.tempo_units = (1, 4)  # note type of tempo direction
-        s.pad = pad  # the output path or none
+        s.output_dir = output_dir  # the output path or none
+        s.pad = output_dir
         s.X = X + 1  # the abc tune number
         s.denL = options.d  # denominator of the unit length (L:) from -d option
         s.volpan = int(options.m)  # 0 -> no %%MIDI, 1 -> only program, 2 -> all %%MIDI
@@ -433,9 +434,9 @@ class ABCoutput:
         s.stemless = 0  # use U:s=!stemless!
         s.shiftStem = options.s  # shift note heads 3 units left
         s.dojef = 0  # => s.tstep in mkHeader
-        if pad:
+        if output_dir:
             _, base_name = os.path.split(fnmext)
-            s.outfile = open(os.path.join(pad, base_name), "w")
+            s.outfile = open(os.path.join(output_dir, base_name), "w")
         else:
             s.outfile = sys.stdout
         if s.jscript:
@@ -2331,9 +2332,7 @@ if __name__ == "__main__":
         dest="stm",
         default=False,
     )
-    parser.add_option(
-        "-i", action="store_true", help="read xml file from standard input"
-    )
+    parser.add_option("-i", help="A directory of XML files.", type="string")
     options, args = parser.parse_args()
     if options.n < 0:
         parser.error("only values >= 0")
@@ -2344,22 +2343,13 @@ if __name__ == "__main__":
             "D should be on of %s" % ",".join([str(2**n) for n in range(10)])
         )
     options.p = options.p and options.p.split(",") or []  # ==> [] | [string]
-    if len(args) == 0 and not options.i:
-        parser.error("no input file given")
-    pad = options.o
-    if pad:
-        if not os.path.exists(pad):
-            os.mkdir(pad)
-        if not os.path.isdir(pad):
-            parser.error("%s is not a directory" % pad)
+    output_dir = options.o
     fnmext_list = []
-    for i in args:
-        fnmext_list += glob(i)
-    if options.i:
-        fnmext_list = ["stdin.xml"]
+    fnmext_list = os.listdir(options.i)
     if not fnmext_list:
         parser.error("none of the input files exist")
     for X, fnmext in enumerate(fnmext_list):
+        fnmext = os.path.join(options.i, fnmext)
         fnm, ext = os.path.splitext(fnmext)
         if ext.lower() not in (".xml", ".mxl", ".musicxml"):
             info(
@@ -2369,8 +2359,6 @@ if __name__ == "__main__":
         if os.path.isdir(fnmext):
             info("skipped directory %s. Only files are accepted" % fnmext)
             continue
-        if fnmext == "stdin.xml":
-            fobj = sys.stdin
         elif ext.lower() == ".mxl":  # extract .xml file from .mxl file
             z = ZipFile(fnmext)
             for (
@@ -2383,7 +2371,7 @@ if __name__ == "__main__":
             fobj = open(fnmext, "rb")  # open regular xml file
 
         abcOut = ABCoutput(
-            fnm + ".abc", pad, X, options
+            fnm + ".abc", output_dir, X, options
         )  # create global ABC output object
         psr = Parser(options)  # xml parser
         try:
